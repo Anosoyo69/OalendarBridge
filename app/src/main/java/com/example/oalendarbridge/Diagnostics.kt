@@ -483,6 +483,18 @@ object Diagnostics {
         UsageStatsManager.STANDBY_BUCKET_RESTRICTED ->
             "RESTRICTED（受限）"
 
+        /*
+         * 以下两个是隐藏常量，只能写字面值：
+         *
+         * 5  = STANDBY_BUCKET_EXEMPTED（不受待机限制，最宽松）
+         * 50 = STANDBY_BUCKET_NEVER（几乎不给运行机会）
+         */
+        5 ->
+            "EXEMPTED（已豁免待机限制）"
+
+        50 ->
+            "NEVER（基本不给运行机会）"
+
         else ->
             "其他($bucket)"
     }

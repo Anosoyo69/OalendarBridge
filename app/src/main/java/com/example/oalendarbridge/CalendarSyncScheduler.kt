@@ -110,7 +110,8 @@ object CalendarSyncScheduler {
 
         Diagnostics.log(
             context,
-            "schedule：注册结果=$result（0=成功），等待日历内容变化"
+            "schedule：注册结果=$result" +
+                    "（1=成功/0=失败），等待日历内容变化"
         )
 
         return result
