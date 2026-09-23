@@ -19,6 +19,10 @@ class BootReceiver : BroadcastReceiver() {
 
             Intent.ACTION_BOOT_COMPLETED -> {
                 // 产品规则：手机重启后默认关闭。
+                Diagnostics.log(
+                    context.applicationContext,
+                    "重启后按产品规则：关闭自动同步并取消作业"
+                )
                 SyncEngine.disableSync(
                     context.applicationContext
                 )

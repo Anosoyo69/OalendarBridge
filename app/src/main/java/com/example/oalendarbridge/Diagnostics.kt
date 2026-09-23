@@ -6,6 +6,7 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,11 +29,11 @@ object Diagnostics {
 
     const val TAG = "OalendarBridgeDiag"
 
-    const val BUILD_LABEL = "诊断版 diag1"
+    const val BUILD_LABEL = "诊断版 diag3"
 
     private const val PREFS = "oalendar_bridge_diagnostics"
     private const val KEY_LOG = "log_lines"
-    private const val MAX_LINES = 150
+    private const val MAX_LINES = 400
 
     /*
      * 写入一行诊断日志。
@@ -333,6 +334,26 @@ object Diagnostics {
                     if (power.isDeviceIdleMode) "是" else "否"
                 )
             }
+
+        } catch (_: Exception) {
+        }
+
+        /*
+         * 系统已开机时长：用来判断"夜间是否重启过手机"。
+         * 重启会让自动同步按产品规则变为 OFF，需要能和手动关闭区分开。
+         */
+        try {
+
+            val totalMinutes =
+                SystemClock.elapsedRealtime() / 60000L
+
+            builder.append("\n系统已开机时长：")
+            builder.append(totalMinutes / (60 * 24))
+            builder.append("天")
+            builder.append((totalMinutes % (60 * 24)) / 60)
+            builder.append("小时")
+            builder.append(totalMinutes % 60)
+            builder.append("分")
 
         } catch (_: Exception) {
         }

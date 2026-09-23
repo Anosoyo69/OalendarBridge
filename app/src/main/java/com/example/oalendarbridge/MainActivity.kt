@@ -105,6 +105,10 @@ private fun BridgeScreen() {
             if (enabled) {
                 CalendarSyncScheduler.ensureScheduled(context)
             } else {
+                Diagnostics.log(
+                    context,
+                    "界面加载：自动同步为 OFF，确认取消调度"
+                )
                 CalendarSyncScheduler.cancel(context)
             }
 
@@ -117,7 +121,7 @@ private fun BridgeScreen() {
                     Diagnostics.environmentSummary(context) +
                         "\n" +
                         Diagnostics.jobSummary(context),
-                log = Diagnostics.readLog(context, 30)
+                log = Diagnostics.readLog(context, 150)
             )
         }
 
@@ -248,6 +252,10 @@ private fun BridgeScreen() {
                                 busy = true
 
                                 if (newValue) {
+                                    Diagnostics.log(
+                                        context,
+                                        "用户操作：把自动同步打开"
+                                    )
                                     val result = withContext(Dispatchers.IO) {
                                         val enabledResult = SyncEngine.enableSync(context)
                                         if (enabledResult.success) {
@@ -257,6 +265,10 @@ private fun BridgeScreen() {
                                     }
                                     status = result.message
                                 } else {
+                                    Diagnostics.log(
+                                        context,
+                                        "用户操作：把自动同步关闭"
+                                    )
                                     withContext(Dispatchers.IO) {
                                         if (SyncEngine.isSyncEnabled(context)) {
                                             SyncEngine.checkAndMigrateNewEvents(context)
