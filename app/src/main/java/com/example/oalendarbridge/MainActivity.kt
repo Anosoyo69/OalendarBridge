@@ -1,6 +1,8 @@
 package com.example.oalendarbridge
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -47,7 +49,9 @@ private data class ScreenState(
     val calendars: List<CalendarInfo>,
     val source: CalendarInfo?,
     val target: CalendarInfo?,
-    val syncEnabled: Boolean
+    val syncEnabled: Boolean,
+    val diagnostics: String,
+    val log: List<String>
 )
 
 class MainActivity : ComponentActivity() {
@@ -75,6 +79,8 @@ private fun BridgeScreen() {
     var syncEnabled by remember { mutableStateOf(SyncEngine.isSyncEnabled(context)) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("正在检测日历……") }
+    var diagnostics by remember { mutableStateOf("") }
+    var logLines by remember { mutableStateOf(emptyList<String>()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -88,6 +94,7 @@ private fun BridgeScreen() {
     suspend fun reload(runCheck: Boolean) {
         val state = withContext(Dispatchers.IO) {
             if (runCheck && SyncEngine.isSyncEnabled(context)) {
+                Diagnostics.log(context, "界面触发一次检查")
                 SyncEngine.checkAndMigrateNewEvents(context)
             }
 
@@ -105,7 +112,12 @@ private fun BridgeScreen() {
                 calendars = list,
                 source = selection.source,
                 target = selection.target,
-                syncEnabled = enabled
+                syncEnabled = enabled,
+                diagnostics =
+                    Diagnostics.environmentSummary(context) +
+                        "\n" +
+                        Diagnostics.jobSummary(context),
+                log = Diagnostics.readLog(context, 30)
             )
         }
 
@@ -113,6 +125,8 @@ private fun BridgeScreen() {
         source = state.source
         target = state.target
         syncEnabled = state.syncEnabled
+        diagnostics = state.diagnostics
+        logLines = state.log
     }
 
     LaunchedEffect(Unit) {
@@ -277,6 +291,82 @@ private fun BridgeScreen() {
                     "ColorOS 请保持允许自启动、后台运行和后台弹出界面。",
                     style = MaterialTheme.typography.bodySmall
                 )
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("诊断：后台唤醒链路", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    Diagnostics.BUILD_LABEL,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(diagnostics, style = MaterialTheme.typography.bodySmall)
+
+                Text("最近日志（新→旧）", style = MaterialTheme.typography.labelLarge)
+                if (logLines.isEmpty()) {
+                    Text("（暂无）", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    logLines.forEach { line ->
+                        Text(line, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        enabled = !busy,
+                        onClick = {
+                            val payload =
+                                "版本：" +
+                                    Diagnostics.BUILD_LABEL +
+                                    "\n\n" +
+                                    diagnostics +
+                                    "\n\n日志（新→旧）\n" +
+                                    logLines.joinToString("\n")
+                            try {
+                                val clipboard = context.getSystemService(
+                                    Context.CLIPBOARD_SERVICE
+                                ) as ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    ClipData.newPlainText(
+                                        "OalendarBridge 诊断",
+                                        payload
+                                    )
+                                )
+                                status = "诊断信息已复制到剪贴板"
+                            } catch (_: Exception) {
+                                status = "复制失败"
+                            }
+                        }
+                    ) {
+                        Text("复制诊断信息")
+                    }
+
+                    OutlinedButton(
+                        modifier = Modifier.weight(1f),
+                        enabled = !busy,
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                withContext(Dispatchers.IO) {
+                                    Diagnostics.clearLog(context)
+                                }
+                                reload(false)
+                                status = "诊断日志已清空"
+                                busy = false
+                            }
+                        }
+                    ) {
+                        Text("清空日志")
+                    }
+                }
             }
         }
 
