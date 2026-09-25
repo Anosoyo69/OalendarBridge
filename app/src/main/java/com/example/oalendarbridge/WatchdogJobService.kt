@@ -32,12 +32,25 @@ class WatchdogJobService : JobService() {
         val context = applicationContext
 
         if (!SyncEngine.isSyncEnabled(context)) {
+            Diagnostics.log(
+                context,
+                "watchdog：同步 OFF，一并取消调度"
+            )
             CalendarSyncScheduler.cancel(context)
             return false
         }
 
         val primaryPending =
             CalendarSyncScheduler.isPrimaryJobPending(context)
+
+        Diagnostics.log(
+            context,
+            if (primaryPending) {
+                "watchdog：主作业在队列中，不做任何事"
+            } else {
+                "watchdog：主作业不在队列中，补注册并补一次检查"
+            }
+        )
 
         CalendarSyncScheduler.ensureScheduled(context)
 
@@ -47,10 +60,17 @@ class WatchdogJobService : JobService() {
 
         executor.execute {
 
-            try {
-                SyncEngine.checkAndMigrateNewEvents(context)
-            } catch (_: Exception) {
-            }
+            val outcome =
+                try {
+                    SyncEngine.checkAndMigrateNewEvents(context)
+                } catch (e: Exception) {
+                    "异常 ${e.javaClass.simpleName}"
+                }
+
+            Diagnostics.log(
+                context,
+                "watchdog：补检查结果：$outcome"
+            )
 
             jobFinished(params, false)
         }

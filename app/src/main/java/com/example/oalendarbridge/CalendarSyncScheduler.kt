@@ -34,6 +34,10 @@ object CalendarSyncScheduler {
     fun ensureScheduled(context: Context): Int {
 
         if (!SyncEngine.isSyncEnabled(context)) {
+            Diagnostics.log(
+                context,
+                "ensureScheduled：同步 OFF，取消调度"
+            )
             cancel(context)
             return JobScheduler.RESULT_SUCCESS
         }
@@ -47,11 +51,23 @@ object CalendarSyncScheduler {
                 scheduler.cancel(OLD_JOB_ID)
 
                 if (scheduler.getPendingJob(JOB_ID) != null) {
+                    Diagnostics.log(
+                        context,
+                        "ensureScheduled：作业已在队列中"
+                    )
                     JobScheduler.RESULT_SUCCESS
                 } else {
+                    Diagnostics.log(
+                        context,
+                        "ensureScheduled：作业不在队列中，重新注册"
+                    )
                     scheduleJob(context)
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Diagnostics.log(
+                    context,
+                    "ensureScheduled 异常：${e.javaClass.simpleName}"
+                )
                 JobScheduler.RESULT_FAILURE
             }
 
@@ -68,7 +84,11 @@ object CalendarSyncScheduler {
 
         return try {
             scheduleJob(context)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Diagnostics.log(
+                context,
+                "rescheduleAfterRun 异常：${e.javaClass.simpleName}"
+            )
             JobScheduler.RESULT_FAILURE
         }
     }
@@ -81,6 +101,10 @@ object CalendarSyncScheduler {
             scheduler.cancel(JOB_ID)
             scheduler.cancel(OLD_JOB_ID)
             scheduler.cancel(WATCHDOG_JOB_ID)
+            Diagnostics.log(
+                context,
+                "cancel：已取消主作业与看门狗"
+            )
         } catch (_: Exception) {
         }
     }
@@ -110,7 +134,16 @@ object CalendarSyncScheduler {
             .setTriggerContentMaxDelay(5000L)
             .build()
 
-        return scheduler.schedule(job)
+        val result =
+            scheduler.schedule(job)
+
+        Diagnostics.log(
+            context,
+            "schedule：注册结果=$result" +
+                    "（1=成功/0=失败），等待日历内容变化"
+        )
+
+        return result
     }
 
     /*
@@ -139,7 +172,14 @@ object CalendarSyncScheduler {
                 .setPeriodic(WATCHDOG_INTERVAL_MS)
                 .build()
 
-            scheduler.schedule(job)
+            val result =
+                scheduler.schedule(job)
+
+            Diagnostics.log(
+                context,
+                "watchdog：注册结果=$result" +
+                        "（1=成功/0=失败），每小时兜底一次"
+            )
         } catch (_: Exception) {
         }
     }

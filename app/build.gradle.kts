@@ -14,8 +14,8 @@ android {
         applicationId = "com.example.oalendarbridge"
         minSdk = 26
         targetSdk = 37
-        versionCode = 5
-        versionName = "1.1"
+        versionCode = 4
+        versionName = "1.1-diagtest"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
