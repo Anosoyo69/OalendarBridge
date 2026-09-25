@@ -26,6 +26,11 @@
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:exported="false" />
 
+        <service
+            android:name="com.example.oalendarbridge.WatchdogJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="false" />
+
         <receiver
             android:name="com.example.oalendarbridge.BootReceiver"
             android:enabled="true"
