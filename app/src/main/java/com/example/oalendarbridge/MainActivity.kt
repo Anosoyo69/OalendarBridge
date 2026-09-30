@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,6 +82,7 @@ private fun BridgeScreen() {
     var status by remember { mutableStateOf("正在检测日历……") }
     var diagnostics by remember { mutableStateOf("") }
     var logLines by remember { mutableStateOf(emptyList<String>()) }
+    var diagnosticsExpanded by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -311,72 +313,99 @@ private fun BridgeScreen() {
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("诊断：后台唤醒链路", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            diagnosticsExpanded = !diagnosticsExpanded
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "诊断（遇到问题时可展开）",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        if (diagnosticsExpanded) "收起 ▲" else "展开 ▼",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
                 Text(
-                    Diagnostics.BUILD_LABEL,
+                    "记录后台唤醒链路，用于排查“新建日程没有同步”的问题。",
                     style = MaterialTheme.typography.bodySmall
                 )
-                Text(diagnostics, style = MaterialTheme.typography.bodySmall)
 
-                Text("最近日志（新→旧）", style = MaterialTheme.typography.labelLarge)
-                if (logLines.isEmpty()) {
-                    Text("（暂无）", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    logLines.forEach { line ->
-                        Text(line, style = MaterialTheme.typography.bodySmall)
+                if (diagnosticsExpanded) {
+                    Text(
+                        Diagnostics.BUILD_LABEL,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(diagnostics, style = MaterialTheme.typography.bodySmall)
+
+                    Text(
+                        "最近日志（新→旧）",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    if (logLines.isEmpty()) {
+                        Text("（暂无）", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        logLines.forEach { line ->
+                            Text(line, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        enabled = !busy,
-                        onClick = {
-                            val payload =
-                                "版本：" +
-                                    Diagnostics.BUILD_LABEL +
-                                    "\n\n" +
-                                    diagnostics +
-                                    "\n\n日志（新→旧）\n" +
-                                    logLines.joinToString("\n")
-                            try {
-                                val clipboard = context.getSystemService(
-                                    Context.CLIPBOARD_SERVICE
-                                ) as ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    ClipData.newPlainText(
-                                        "OalendarBridge 诊断",
-                                        payload
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            enabled = !busy,
+                            onClick = {
+                                val payload =
+                                    "版本：" +
+                                        Diagnostics.BUILD_LABEL +
+                                        "\n\n" +
+                                        diagnostics +
+                                        "\n\n日志（新→旧）\n" +
+                                        logLines.joinToString("\n")
+                                try {
+                                    val clipboard = context.getSystemService(
+                                        Context.CLIPBOARD_SERVICE
+                                    ) as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "OalendarBridge 诊断",
+                                            payload
+                                        )
                                     )
-                                )
-                                status = "诊断信息已复制到剪贴板"
-                            } catch (_: Exception) {
-                                status = "复制失败"
-                            }
-                        }
-                    ) {
-                        Text("复制诊断信息")
-                    }
-
-                    OutlinedButton(
-                        modifier = Modifier.weight(1f),
-                        enabled = !busy,
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                withContext(Dispatchers.IO) {
-                                    Diagnostics.clearLog(context)
+                                    status = "诊断信息已复制到剪贴板"
+                                } catch (_: Exception) {
+                                    status = "复制失败"
                                 }
-                                reload(false)
-                                status = "诊断日志已清空"
-                                busy = false
                             }
+                        ) {
+                            Text("复制诊断信息")
                         }
-                    ) {
-                        Text("清空日志")
+
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            enabled = !busy,
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    withContext(Dispatchers.IO) {
+                                        Diagnostics.clearLog(context)
+                                    }
+                                    reload(false)
+                                    status = "诊断日志已清空"
+                                    busy = false
+                                }
+                            }
+                        ) {
+                            Text("清空日志")
+                        }
                     }
                 }
             }

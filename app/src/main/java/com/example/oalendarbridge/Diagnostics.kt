@@ -29,7 +29,7 @@ object Diagnostics {
 
     const val TAG = "OalendarBridgeDiag"
 
-    const val BUILD_LABEL = "测试版 v1.1-diagtest"
+    const val BUILD_LABEL = "v1.1.1"
 
     private const val PREFS = "oalendar_bridge_diagnostics"
     private const val KEY_LOG = "log_lines"
