@@ -1,6 +1,8 @@
 package com.example.oalendarbridge
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -8,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,7 +50,9 @@ private data class ScreenState(
     val calendars: List<CalendarInfo>,
     val source: CalendarInfo?,
     val target: CalendarInfo?,
-    val syncEnabled: Boolean
+    val syncEnabled: Boolean,
+    val diagnostics: String,
+    val log: List<String>
 )
 
 class MainActivity : ComponentActivity() {
@@ -75,6 +80,9 @@ private fun BridgeScreen() {
     var syncEnabled by remember { mutableStateOf(SyncEngine.isSyncEnabled(context)) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("正在检测日历……") }
+    var diagnostics by remember { mutableStateOf("") }
+    var logLines by remember { mutableStateOf(emptyList<String>()) }
+    var diagnosticsExpanded by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -88,6 +96,7 @@ private fun BridgeScreen() {
     suspend fun reload(runCheck: Boolean) {
         val state = withContext(Dispatchers.IO) {
             if (runCheck && SyncEngine.isSyncEnabled(context)) {
+                Diagnostics.log(context, "界面触发一次检查")
                 SyncEngine.checkAndMigrateNewEvents(context)
             }
 
@@ -98,6 +107,10 @@ private fun BridgeScreen() {
             if (enabled) {
                 CalendarSyncScheduler.ensureScheduled(context)
             } else {
+                Diagnostics.log(
+                    context,
+                    "界面加载：自动同步为 OFF，确认取消调度"
+                )
                 CalendarSyncScheduler.cancel(context)
             }
 
@@ -105,7 +118,12 @@ private fun BridgeScreen() {
                 calendars = list,
                 source = selection.source,
                 target = selection.target,
-                syncEnabled = enabled
+                syncEnabled = enabled,
+                diagnostics =
+                    Diagnostics.environmentSummary(context) +
+                        "\n" +
+                        Diagnostics.jobSummary(context),
+                log = Diagnostics.readLog(context, 150)
             )
         }
 
@@ -113,6 +131,8 @@ private fun BridgeScreen() {
         source = state.source
         target = state.target
         syncEnabled = state.syncEnabled
+        diagnostics = state.diagnostics
+        logLines = state.log
     }
 
     LaunchedEffect(Unit) {
@@ -234,6 +254,10 @@ private fun BridgeScreen() {
                                 busy = true
 
                                 if (newValue) {
+                                    Diagnostics.log(
+                                        context,
+                                        "用户操作：把自动同步打开"
+                                    )
                                     val result = withContext(Dispatchers.IO) {
                                         val enabledResult = SyncEngine.enableSync(context)
                                         if (enabledResult.success) {
@@ -243,6 +267,10 @@ private fun BridgeScreen() {
                                     }
                                     status = result.message
                                 } else {
+                                    Diagnostics.log(
+                                        context,
+                                        "用户操作：把自动同步关闭"
+                                    )
                                     withContext(Dispatchers.IO) {
                                         if (SyncEngine.isSyncEnabled(context)) {
                                             SyncEngine.checkAndMigrateNewEvents(context)
@@ -277,6 +305,109 @@ private fun BridgeScreen() {
                     "ColorOS 请保持允许自启动、后台运行和后台弹出界面。",
                     style = MaterialTheme.typography.bodySmall
                 )
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            diagnosticsExpanded = !diagnosticsExpanded
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "诊断（遇到问题时可展开）",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        if (diagnosticsExpanded) "收起 ▲" else "展开 ▼",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Text(
+                    "记录后台唤醒链路，用于排查“新建日程没有同步”的问题。",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                if (diagnosticsExpanded) {
+                    Text(
+                        Diagnostics.BUILD_LABEL,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(diagnostics, style = MaterialTheme.typography.bodySmall)
+
+                    Text(
+                        "最近日志（新→旧）",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    if (logLines.isEmpty()) {
+                        Text("（暂无）", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        logLines.forEach { line ->
+                            Text(line, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            enabled = !busy,
+                            onClick = {
+                                val payload =
+                                    "版本：" +
+                                        Diagnostics.BUILD_LABEL +
+                                        "\n\n" +
+                                        diagnostics +
+                                        "\n\n日志（新→旧）\n" +
+                                        logLines.joinToString("\n")
+                                try {
+                                    val clipboard = context.getSystemService(
+                                        Context.CLIPBOARD_SERVICE
+                                    ) as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText(
+                                            "OalendarBridge 诊断",
+                                            payload
+                                        )
+                                    )
+                                    status = "诊断信息已复制到剪贴板"
+                                } catch (_: Exception) {
+                                    status = "复制失败"
+                                }
+                            }
+                        ) {
+                            Text("复制诊断信息")
+                        }
+
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            enabled = !busy,
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    withContext(Dispatchers.IO) {
+                                        Diagnostics.clearLog(context)
+                                    }
+                                    reload(false)
+                                    status = "诊断日志已清空"
+                                    busy = false
+                                }
+                            }
+                        ) {
+                            Text("清空日志")
+                        }
+                    }
+                }
             }
         }
 
